@@ -64,12 +64,11 @@ int x, y, z;
 static Preferences prefs;
 static bool use_fahrenheit = false;
 static bool use_24_hour = false; 
-//static bool use_night_mode = false;
 static char latitude[16] = LATITUDE_DEFAULT;
 static char longitude[16] = LONGITUDE_DEFAULT;
 static String location = String(LOCATION_DEFAULT);
 static char dd_opts[512];
-static DynamicJsonDocument geoDoc(8 * 1024);
+static DynamicJsonDocument geoDoc(24 * 1024);
 static JsonArray geoResults;
 
 static uint32_t day_brightness = 255;
@@ -87,15 +86,17 @@ static lv_obj_t *lbl_today_feels_like;
 static lv_obj_t *img_today_icon;
 static lv_obj_t *lbl_forecast;
 static lv_obj_t *box_daily;
-static lv_obj_t *box_hourly;
+static lv_obj_t *box_hourly_1;
+static lv_obj_t *box_hourly_2;
+static lv_obj_t *box_hourly_3;
 static lv_obj_t *lbl_daily_day[7];
 static lv_obj_t *lbl_daily_high[7];
 static lv_obj_t *lbl_daily_low[7];
 static lv_obj_t *img_daily[7];
-static lv_obj_t *lbl_hourly[7];
-static lv_obj_t *lbl_precipitation_probability[7];
-static lv_obj_t *lbl_hourly_temp[7];
-static lv_obj_t *img_hourly[7];
+static lv_obj_t *lbl_hourly[21];
+static lv_obj_t *lbl_precipitation_probability[21];
+static lv_obj_t *lbl_hourly_temp[21];
+static lv_obj_t *img_hourly[21];
 static lv_obj_t *lbl_loc;
 static lv_obj_t *loc_ta;
 static lv_obj_t *results_dd;
@@ -321,6 +322,7 @@ void setup() {
 
   // Check for Wi-Fi config and request it if not available
   WiFiManager wm;
+  wm.setTimeout(120); // Setting the connection wait timeout to 120 seconds
   wm.setAPCallback(apModeCallback);
   wm.autoConnect(DEFAULT_CAPTIVE_SSID);
 
@@ -491,24 +493,24 @@ void create_ui() {
     lv_obj_align(img_daily[i], LV_ALIGN_TOP_LEFT, 80, i * 24);
   }
 
-  box_hourly = lv_obj_create(scr);
-  lv_obj_set_size(box_hourly, 220, 180);
-  lv_obj_align(box_hourly, LV_ALIGN_TOP_LEFT, 10, 135);
-  lv_obj_set_style_bg_color(box_hourly, lv_color_hex(0x5e9bc8), LV_PART_MAIN | LV_STATE_DEFAULT);
-  lv_obj_set_style_bg_opa(box_hourly, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
-  lv_obj_set_style_radius(box_hourly, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
-  lv_obj_set_style_border_width(box_hourly, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-  lv_obj_clear_flag(box_hourly, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_scrollbar_mode(box_hourly, LV_SCROLLBAR_MODE_OFF);
-  lv_obj_set_style_pad_all(box_hourly, 10, LV_PART_MAIN);
-  lv_obj_set_style_pad_gap(box_hourly, 0, LV_PART_MAIN);
-  lv_obj_add_event_cb(box_hourly, hourly_cb, LV_EVENT_CLICKED, NULL);
+  box_hourly_1 = lv_obj_create(scr);
+  lv_obj_set_size(box_hourly_1, 220, 180);
+  lv_obj_align(box_hourly_1, LV_ALIGN_TOP_LEFT, 10, 135);
+  lv_obj_set_style_bg_color(box_hourly_1, lv_color_hex(0x5e9bc8), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(box_hourly_1, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_radius(box_hourly_1, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_width(box_hourly_1, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_clear_flag(box_hourly_1, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollbar_mode(box_hourly_1, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_set_style_pad_all(box_hourly_1, 10, LV_PART_MAIN);
+  lv_obj_set_style_pad_gap(box_hourly_1, 0, LV_PART_MAIN);
+  lv_obj_add_event_cb(box_hourly_1, hourly_1_cb, LV_EVENT_CLICKED, NULL);
 
   for (int i = 0; i < 7; i++) {
-    lbl_hourly[i] = lv_label_create(box_hourly);
-    lbl_precipitation_probability[i] = lv_label_create(box_hourly);
-    lbl_hourly_temp[i] = lv_label_create(box_hourly);
-    img_hourly[i] = lv_img_create(box_hourly);
+    lbl_hourly[i] = lv_label_create(box_hourly_1);
+    lbl_precipitation_probability[i] = lv_label_create(box_hourly_1);
+    lbl_hourly_temp[i] = lv_label_create(box_hourly_1);
+    img_hourly[i] = lv_img_create(box_hourly_1);
 
     lv_obj_add_style(lbl_hourly[i], &default_label_style, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(lbl_hourly[i], get_font_16(), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -527,7 +529,81 @@ void create_ui() {
     lv_obj_align(img_hourly[i], LV_ALIGN_TOP_LEFT, 80, i * 24);
   }
 
-  lv_obj_add_flag(box_hourly, LV_OBJ_FLAG_HIDDEN);
+  box_hourly_2 = lv_obj_create(scr);
+  lv_obj_set_size(box_hourly_2, 220, 180);
+  lv_obj_align(box_hourly_2, LV_ALIGN_TOP_LEFT, 10, 135);
+  lv_obj_set_style_bg_color(box_hourly_2, lv_color_hex(0x5e9bc8), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(box_hourly_2, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_radius(box_hourly_2, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_width(box_hourly_2, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_clear_flag(box_hourly_2, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollbar_mode(box_hourly_2, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_set_style_pad_all(box_hourly_2, 10, LV_PART_MAIN);
+  lv_obj_set_style_pad_gap(box_hourly_2, 0, LV_PART_MAIN);
+  lv_obj_add_event_cb(box_hourly_2, hourly_2_cb, LV_EVENT_CLICKED, NULL);
+
+  for (int i = 7; i < 14; i++) {
+    lbl_hourly[i] = lv_label_create(box_hourly_2);
+    lbl_precipitation_probability[i] = lv_label_create(box_hourly_2);
+    lbl_hourly_temp[i] = lv_label_create(box_hourly_2);
+    img_hourly[i] = lv_img_create(box_hourly_2);
+
+    lv_obj_add_style(lbl_hourly[i], &default_label_style, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(lbl_hourly[i], get_font_16(), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(lbl_hourly[i], LV_ALIGN_TOP_LEFT, 2, (i - 7) * 24);
+
+    lv_obj_add_style(lbl_hourly_temp[i], &default_label_style, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(lbl_hourly_temp[i], get_font_16(), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(lbl_hourly_temp[i], LV_ALIGN_TOP_RIGHT, 0, (i - 7) * 24);
+
+    lv_label_set_text(lbl_precipitation_probability[i], "");
+    lv_obj_set_style_text_color(lbl_precipitation_probability[i], lv_color_hex(0xb9ecff), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(lbl_precipitation_probability[i], get_font_16(), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(lbl_precipitation_probability[i], LV_ALIGN_TOP_RIGHT, -55, (i - 7) * 24);
+
+    lv_img_set_src(img_hourly[i], &icon_partly_cloudy);
+    lv_obj_align(img_hourly[i], LV_ALIGN_TOP_LEFT, 80, (i - 7) * 24);
+  }
+
+  box_hourly_3 = lv_obj_create(scr);
+  lv_obj_set_size(box_hourly_3, 220, 180);
+  lv_obj_align(box_hourly_3, LV_ALIGN_TOP_LEFT, 10, 135);
+  lv_obj_set_style_bg_color(box_hourly_3, lv_color_hex(0x5e9bc8), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(box_hourly_3, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_radius(box_hourly_3, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_border_width(box_hourly_3, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_clear_flag(box_hourly_3, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollbar_mode(box_hourly_3, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_set_style_pad_all(box_hourly_3, 10, LV_PART_MAIN);
+  lv_obj_set_style_pad_gap(box_hourly_3, 0, LV_PART_MAIN);
+  lv_obj_add_event_cb(box_hourly_3, hourly_3_cb, LV_EVENT_CLICKED, NULL);
+
+  for (int i = 14; i < 21; i++) {
+    lbl_hourly[i] = lv_label_create(box_hourly_3);
+    lbl_precipitation_probability[i] = lv_label_create(box_hourly_3);
+    lbl_hourly_temp[i] = lv_label_create(box_hourly_3);
+    img_hourly[i] = lv_img_create(box_hourly_3);
+
+    lv_obj_add_style(lbl_hourly[i], &default_label_style, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(lbl_hourly[i], get_font_16(), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(lbl_hourly[i], LV_ALIGN_TOP_LEFT, 2, (i - 14) * 24);
+
+    lv_obj_add_style(lbl_hourly_temp[i], &default_label_style, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(lbl_hourly_temp[i], get_font_16(), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(lbl_hourly_temp[i], LV_ALIGN_TOP_RIGHT, 0, (i - 14) * 24);
+
+    lv_label_set_text(lbl_precipitation_probability[i], "");
+    lv_obj_set_style_text_color(lbl_precipitation_probability[i], lv_color_hex(0xb9ecff), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(lbl_precipitation_probability[i], get_font_16(), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(lbl_precipitation_probability[i], LV_ALIGN_TOP_RIGHT, -55, (i - 14) * 24);
+
+    lv_img_set_src(img_hourly[i], &icon_partly_cloudy);
+    lv_obj_align(img_hourly[i], LV_ALIGN_TOP_LEFT, 80, (i - 14) * 24);
+  }
+
+  lv_obj_add_flag(box_hourly_1, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(box_hourly_2, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(box_hourly_3, LV_OBJ_FLAG_HIDDEN);
 
   // Create clock label in the top-right corner
   lbl_clock = lv_label_create(scr);
@@ -541,7 +617,7 @@ void populate_results_dropdown() {
   dd_opts[0] = '\0';
 
   for (JsonObject item : geoResults) {
-    // Отримуємо name з JSON і замінюємо апостроф
+    // Get name from JSON and replace apostrophe
     String name = item["name"].as<const char*>();
     name.replace("’", "'");
 
@@ -580,7 +656,7 @@ static void location_save_event_cb(lv_event_t *e) {
   prefs.putString("latitude", latitude);
   prefs.putString("longitude", longitude);
 
-  // Отримуємо name, admin як String і замінюємо апостроф
+  // We get name, admin as String and replace the apostrophe
   String name = obj["name"].as<const char*>();
   name.replace("’", "'");
 
@@ -620,16 +696,29 @@ void daily_cb(lv_event_t *e) {
   const LocalizedStrings* strings = get_strings(current_language);
   lv_obj_add_flag(box_daily, LV_OBJ_FLAG_HIDDEN);
   lv_label_set_text(lbl_forecast, strings->hourly_forecast);
-  lv_obj_clear_flag(box_hourly, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(box_hourly_1, LV_OBJ_FLAG_HIDDEN);
 }
 
-void hourly_cb(lv_event_t *e) {
+void hourly_1_cb(lv_event_t *e) {
   const LocalizedStrings* strings = get_strings(current_language);
-  lv_obj_add_flag(box_hourly, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(box_hourly_1, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text(lbl_forecast, strings->hourly_forecast);
+  lv_obj_clear_flag(box_hourly_2, LV_OBJ_FLAG_HIDDEN);
+}
+
+void hourly_2_cb(lv_event_t *e) {
+  const LocalizedStrings* strings = get_strings(current_language);
+  lv_obj_add_flag(box_hourly_2, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text(lbl_forecast, strings->hourly_forecast);
+  lv_obj_clear_flag(box_hourly_3, LV_OBJ_FLAG_HIDDEN);
+}
+
+void hourly_3_cb(lv_event_t *e) {
+  const LocalizedStrings* strings = get_strings(current_language);
+  lv_obj_add_flag(box_hourly_3, LV_OBJ_FLAG_HIDDEN);
   lv_label_set_text(lbl_forecast, strings->seven_day_forecast);
   lv_obj_clear_flag(box_daily, LV_OBJ_FLAG_HIDDEN);
 }
-
 
 static void reset_wifi_event_handler(lv_event_t *e) {
   const LocalizedStrings* strings = get_strings(current_language);
@@ -776,7 +865,8 @@ void create_settings_window() {
   lv_obj_t *title_label = lv_win_add_title(settings_win, strings->aura_settings);
   lv_obj_set_style_text_font(title_label, get_font_20(), 0); 
   // Set margin for the label itself to shift text to the right within its parent (the title bar).
-  lv_obj_set_style_margin_left(title_label, 10, 0); 
+  //lv_obj_set_style_margin_left(title_label, 10, 0);
+  lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
   // Prevent dragging/scrolling of title text (separate calls)
   lv_obj_clear_flag(title_label, LV_OBJ_FLAG_SCROLLABLE); 
   lv_obj_clear_flag(title_label, LV_OBJ_FLAG_PRESS_LOCK);
@@ -796,8 +886,13 @@ void create_settings_window() {
   lv_obj_set_height(cont, LV_SIZE_CONTENT); // Content area height adjusts to children (will scroll vertically if needed)
   
   // Set padding for the content area (left/right padding for all children)
-  lv_obj_set_style_pad_all(cont, 10, LV_PART_MAIN); 
-  
+  //lv_obj_set_style_pad_all(cont, 10, LV_PART_MAIN);
+  lv_obj_set_style_pad_left(cont, 10, LV_PART_MAIN); 
+  lv_obj_set_style_pad_right(cont, 20, LV_PART_MAIN);
+
+  // Calculate width for elements within the content area (240px screen - 10px left pad - 10px right pad = 220px)
+  const int content_element_width = SCREEN_WIDTH - (10 + 20); 
+
   // Set the main content area to a COLUMN FLEX layout
   lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
   // Align items to start (top) on main axis, and start (left) on cross axis
@@ -819,9 +914,6 @@ void create_settings_window() {
     }
   }
 
-  // Calculate width for elements within the content area (240px screen - 10px left pad - 10px right pad = 220px)
-  const int content_element_width = SCREEN_WIDTH - (10 * 2); 
-
 
   // --- Day Brightness Slider ---
   lv_obj_t *lbl_day_b = lv_label_create(cont);
@@ -832,8 +924,8 @@ void create_settings_window() {
   lv_obj_t *slider_day = lv_slider_create(cont);
   lv_slider_set_range(slider_day, 5, 255);
   lv_slider_set_value(slider_day, day_brightness, LV_ANIM_OFF);
-  lv_obj_set_width(slider_day, content_element_width);
-
+  lv_obj_set_width(slider_day, content_element_width - 10);
+  lv_obj_set_style_margin_left(slider_day, 5, LV_PART_MAIN);
 
   lv_obj_add_event_cb(slider_day, [](lv_event_t *e){
     lv_obj_t *s = (lv_obj_t*)lv_event_get_target(e);
@@ -847,7 +939,6 @@ void create_settings_window() {
     lv_obj_t *s = (lv_obj_t*)lv_event_get_target(e);
     day_brightness = lv_slider_get_value(s); // Ensure final value is captured
     analogWrite(LCD_BACKLIGHT_PIN, day_brightness); // Final apply
-    //prefs.putUInt("day_brightness", day_brightness); // Save immediately on release
     manual_brightness_active = true;
     manual_brightness_counter = 0; // Reset counter
   }, LV_EVENT_RELEASED, NULL);
@@ -863,8 +954,8 @@ void create_settings_window() {
   lv_obj_t *slider_night = lv_slider_create(cont);
   lv_slider_set_range(slider_night, 5, 255);
   lv_slider_set_value(slider_night, night_brightness, LV_ANIM_OFF);
-  lv_obj_set_width(slider_night, content_element_width); 
-
+  lv_obj_set_width(slider_night, content_element_width - 10);
+  lv_obj_set_style_margin_left(slider_night, 5, LV_PART_MAIN);
 
   lv_obj_add_event_cb(slider_night, [](lv_event_t *e){
     lv_obj_t *s = (lv_obj_t*)lv_event_get_target(e);
@@ -878,7 +969,6 @@ void create_settings_window() {
     lv_obj_t *s = (lv_obj_t*)lv_event_get_target(e);
     night_brightness = lv_slider_get_value(s); // Ensure final value is captured
     analogWrite(LCD_BACKLIGHT_PIN, night_brightness); // Final apply
-    //prefs.putUInt("night_brightness", night_brightness); // Save immediately on release
     manual_brightness_active = true;
     manual_brightness_counter = 0; // Reset counter
   }, LV_EVENT_RELEASED, NULL);
@@ -1164,7 +1254,7 @@ void fetch_and_update_weather() {
                + "&current=temperature_2m,apparent_temperature,is_day,weather_code"
                + "&daily=temperature_2m_min,temperature_2m_max,weather_code"
                + "&hourly=temperature_2m,precipitation_probability,is_day,weather_code"
-               + "&forecast_hours=7"
+               + "&forecast_hours=21"
                + "&timezone=auto";
 
   HTTPClient http;
@@ -1174,7 +1264,7 @@ void fetch_and_update_weather() {
     Serial.println("Updated weather from open-meteo: " + url);
 
     String payload = http.getString();
-    DynamicJsonDocument doc(32 * 1024);
+    DynamicJsonDocument doc(96 * 1024);
 
     if (deserializeJson(doc, payload) == DeserializationError::Ok) {
       float t_now = doc["current"]["temperature_2m"].as<float>();
@@ -1230,7 +1320,7 @@ void fetch_and_update_weather() {
       JsonArray hourly_weather_codes = doc["hourly"]["weather_code"].as<JsonArray>();
       JsonArray hourly_is_day = doc["hourly"]["is_day"].as<JsonArray>();
 
-      for (int i = 0; i < 7; i++) {
+      for (int i = 0; i < 21; i++) {
         const char *date = hours[i];  // "YYYY-MM-DD"
         int hour = atoi(date + 11);
         int minute = atoi(date + 14);
